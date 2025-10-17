@@ -1,0 +1,27 @@
+{
+  "main": "index.html",
+  "logo": "logo.png",
+  "development": {
+    "main": "http://localhost:5173"
+  },
+  "features": [
+    {
+      "code": "read",
+      "explain": "查看假期倒计时",
+      "cmds": [
+        "假期星图",
+        "倒计时",
+        "holiday"
+      ]
+    },
+    {
+      "code": "write",
+      "explain": "设置倒计时参数",
+      "mainHide": true,
+      "cmds": [
+        "假期设置",
+        "倒计时设置"
+      ]
+    }
+  ]
+}
