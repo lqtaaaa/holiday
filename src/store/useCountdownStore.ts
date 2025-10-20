@@ -1,5 +1,5 @@
 import { defineStore } from "pinia";
-import { computed, onUnmounted, ref } from "vue";
+import { computed, ref } from "vue";
 import dayjs, { Dayjs } from "../utils/time";
 import { getStorage, removeStorage, setStorage } from "../utils/storage";
 import type {
@@ -116,9 +116,6 @@ export const useCountdownStore = defineStore("countdown", () => {
       timer.value = null;
     }
   };
-
-  startTicker();
-  onUnmounted(stopTicker);
 
   const workCountdown = computed(() => {
     const nextEnd = getNextWorkEnd(currentTime.value, workSchedule.value);
@@ -251,5 +248,7 @@ export const useCountdownStore = defineStore("countdown", () => {
     clearCustomCountdowns,
     syncHolidayFromICS,
     resetHolidayEvents,
+    startTicker,
+    stopTicker,
   };
 });

@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { computed } from 'vue';
+import { computed, onMounted, onUnmounted } from 'vue';
 import { useCountdownStore } from '../store/useCountdownStore';
 
 const props = defineProps({
@@ -21,6 +21,16 @@ const handleOpenSettings = () => {
     window.utools.redirect('假期设置', '')
   }
 }
+
+// 组件挂载时启动定时器
+onMounted(() => {
+  store.startTicker()
+})
+
+// 组件卸载时停止定时器
+onUnmounted(() => {
+  store.stopTicker()
+})
 </script>
 
 <template>
