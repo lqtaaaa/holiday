@@ -94,14 +94,36 @@ function findNextEvent(
   name: string
 ): HolidayEvent | null {
   const now = dayjs();
-  const sorted = events
-    .filter((event) => event.name.includes(name))
+
+  // 过滤出匹配的事件，排除包含"(班)"的事件
+  const filtered = events
+    .filter((event) => {
+      const eventName = event.name;
+      // 必须包含节假日名称
+      if (!eventName.includes(name)) return false;
+      // 排除工作日（班）
+      if (eventName.includes("(班)") || eventName.includes("（班）")) return false;
+      return true;
+    })
     .sort((a, b) => dayjs(a.date).valueOf() - dayjs(b.date).valueOf());
-  for (const event of sorted) {
+
+  // 优先查找带有"(休)"标记的第一个未来事件
+  for (const event of filtered) {
+    if (dayjs(event.date).endOf("day").isAfter(now)) {
+      const eventName = event.name;
+      if (eventName.includes("(休)") || eventName.includes("（休）")) {
+        return event;
+      }
+    }
+  }
+
+  // 如果没有找到带"(休)"的，返回第一个不带后缀的未来事件
+  for (const event of filtered) {
     if (dayjs(event.date).endOf("day").isAfter(now)) {
       return event;
     }
   }
+
   return null;
 }
 
@@ -114,7 +136,16 @@ export function ensureMajorHolidayEvents(
   MAJOR_HOLIDAYS.forEach((config) => {
     const next = findNextEvent(events, config.name);
     if (next) {
-      ensured.push(next);
+      // 清理节假日名称，去掉（休）（班）等后缀
+      const cleanName = next.name
+        .replace(/[（(]休[）)]/g, "")
+        .replace(/[（(]班[）)]/g, "")
+        .trim();
+
+      ensured.push({
+        ...next,
+        name: cleanName || config.name, // 如果清理后为空，使用配置的名称
+      });
       return;
     }
 
