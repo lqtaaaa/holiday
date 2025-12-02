@@ -1,18 +1,28 @@
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
-import dayjs, { Dayjs } from "../utils/time";
+import dayjs, { formatDuration } from "../utils/time";
 import { getStorage, removeStorage, setStorage } from "../utils/storage";
 import type {
   CountdownDisplayItem,
   CountdownItem,
+  DisplaySettings,
   HolidayEvent,
+  LunchBreakSetting,
+  SalarySettings,
   WorkSchedule,
 } from "../types";
 import { getLunarText } from "../utils/lunar";
 import { ensureMajorHolidayEvents, parseHolidayICS } from "../utils/holiday";
+import {
+  findNextWorkSession,
+  summarizeWorkProgress,
+} from "../utils/workSession";
 
 const STORAGE_KEYS = {
   workSchedule: "workSchedule",
+  lunchBreak: "lunchBreak",
+  salarySettings: "salarySettings",
+  displaySettings: "displaySettings",
   customCountdowns: "customCountdowns",
   holidayEvents: "holidayEvents",
   holidaySyncTime: "holidaySyncTime",
@@ -24,50 +34,69 @@ const DEFAULT_WORK_SCHEDULE: WorkSchedule = {
   workdays: [1, 2, 3, 4, 5],
 };
 
-function parseTimeToDayjs(base: Dayjs, time: string): Dayjs {
-  const [hour, minute] = time.split(":").map((v) => Number(v));
-  return base.hour(hour).minute(minute).second(0).millisecond(0);
+const DEFAULT_LUNCH_BREAK: LunchBreakSetting = {
+  enabled: false,
+  start: "12:00",
+  end: "13:30",
+};
+
+const DEFAULT_SALARY_SETTINGS: SalarySettings = {
+  day: 10,
+  holidayRule: "nearest",
+};
+
+const DEFAULT_DISPLAY_SETTINGS: DisplaySettings = {
+  showSeconds: false,
+  mode: "normal",
+};
+
+function normalizeLunchBreak(
+  value?: Partial<LunchBreakSetting> | null
+): LunchBreakSetting {
+  if (!value) return { ...DEFAULT_LUNCH_BREAK };
+  return {
+    enabled: Boolean(value.enabled),
+    start: value.start || DEFAULT_LUNCH_BREAK.start,
+    end: value.end || DEFAULT_LUNCH_BREAK.end,
+  };
 }
 
-function getNextWorkEnd(now: Dayjs, schedule?: WorkSchedule | null): Dayjs | null {
-  if (!schedule || !schedule.workdays?.length) return null;
-  for (let i = 0; i < 14; i++) {
-    const date = now.add(i === 0 ? 0 : 1, "day");
-    const day = date.day();
-    if (!schedule.workdays.includes(day)) continue;
-
-    const start = parseTimeToDayjs(date.startOf("day"), schedule.start);
-    const end = parseTimeToDayjs(date.startOf("day"), schedule.end);
-
-    if (date.isBefore(start)) {
-      return end;
-    }
-
-    if (date.isSame(now, "day")) {
-      if (now.isBefore(end)) {
-        return end;
-      }
-    } else {
-      return end;
-    }
-  }
-  return null;
+function normalizeSalarySettings(
+  value?: Partial<SalarySettings> | null
+): SalarySettings {
+  if (!value) return { ...DEFAULT_SALARY_SETTINGS };
+  const day = Number(value.day);
+  const safeDay = Number.isFinite(day)
+    ? Math.min(31, Math.max(1, Math.round(day)))
+    : DEFAULT_SALARY_SETTINGS.day;
+  const validRules: SalarySettings["holidayRule"][] = [
+    "delay",
+    "advance",
+    "nearest",
+    "ignore",
+  ];
+  const rule = validRules.includes(value.holidayRule as SalarySettings["holidayRule"])
+    ? (value.holidayRule as SalarySettings["holidayRule"])
+    : DEFAULT_SALARY_SETTINGS.holidayRule;
+  return {
+    day: safeDay,
+    holidayRule: rule,
+  };
 }
 
-function formatDuration(diffMs: number): string {
-  if (diffMs <= 0) return "已到达";
-  const duration = dayjs.duration(diffMs);
-  const days = Math.floor(duration.asDays());
-  const hours = duration.hours();
-  const minutes = duration.minutes();
-  const seconds = duration.seconds();
-  const parts: string[] = [];
-  if (days) parts.push(`${days}天`);
-  if (hours || parts.length) parts.push(`${hours}小时`);
-  if (minutes || parts.length) parts.push(`${minutes}分`);
-  parts.push(`${seconds}秒`);
-  return parts.join("");
+function normalizeDisplaySettings(
+  value?: Partial<DisplaySettings> | null
+): DisplaySettings {
+  if (!value) return { ...DEFAULT_DISPLAY_SETTINGS };
+  return {
+    showSeconds:
+      typeof value.showSeconds === "boolean"
+        ? value.showSeconds
+        : DEFAULT_DISPLAY_SETTINGS.showSeconds,
+    mode: value.mode === "stealth" ? "stealth" : "normal",
+  };
 }
+
 
 export const useCountdownStore = defineStore("countdown", () => {
   const currentTime = ref(dayjs());
@@ -79,6 +108,30 @@ export const useCountdownStore = defineStore("countdown", () => {
 
   const workSchedule = ref<WorkSchedule>(
     getStorage<WorkSchedule>(STORAGE_KEYS.workSchedule, DEFAULT_WORK_SCHEDULE)
+  );
+  const lunchBreak = ref<LunchBreakSetting>(
+    normalizeLunchBreak(
+      getStorage<LunchBreakSetting | null>(
+        STORAGE_KEYS.lunchBreak,
+        DEFAULT_LUNCH_BREAK
+      )
+    )
+  );
+  const salarySettings = ref<SalarySettings>(
+    normalizeSalarySettings(
+      getStorage<SalarySettings | null>(
+        STORAGE_KEYS.salarySettings,
+        DEFAULT_SALARY_SETTINGS
+      )
+    )
+  );
+  const displaySettings = ref<DisplaySettings>(
+    normalizeDisplaySettings(
+      getStorage<DisplaySettings | null>(
+        STORAGE_KEYS.displaySettings,
+        DEFAULT_DISPLAY_SETTINGS
+      )
+    )
   );
   const customCountdowns = ref<CountdownItem[]>(
     getStorage<CountdownItem[]>(STORAGE_KEYS.customCountdowns, [])
@@ -118,14 +171,24 @@ export const useCountdownStore = defineStore("countdown", () => {
   };
 
   const workCountdown = computed(() => {
-    const nextEnd = getNextWorkEnd(currentTime.value, workSchedule.value);
-    if (!nextEnd) return null;
-    const diffMs = nextEnd.diff(currentTime.value);
+    const session = findNextWorkSession(
+      currentTime.value,
+      workSchedule.value,
+      lunchBreak.value
+    );
+    if (!session) return null;
+    const snapshot = summarizeWorkProgress(currentTime.value, session);
+    const diffMs = snapshot.remainingMs;
     return {
-      target: nextEnd.toISOString(),
-      targetText: nextEnd.format("YYYY-MM-DD HH:mm:ss"),
+      target: session.end.toISOString(),
+      targetText: session.end.format("YYYY-MM-DD HH:mm:ss"),
       diffMs,
       text: formatDuration(diffMs),
+      phase: snapshot.phase,
+      totalMs: snapshot.totalMs,
+      workedMs: snapshot.workedMs,
+      isToday: session.isToday,
+      lunchActive: snapshot.phase === "lunch",
     };
   });
 
@@ -135,6 +198,7 @@ export const useCountdownStore = defineStore("countdown", () => {
     return {
       date: now.format("YYYY年M月D日 dddd"),
       time: now.format("HH:mm:ss"),
+      timeSimple: now.format("HH:mm"),
       lunar,
     };
   });
@@ -188,6 +252,27 @@ export const useCountdownStore = defineStore("countdown", () => {
     setStorage(STORAGE_KEYS.workSchedule, merged);
   };
 
+  const setLunchBreakSetting = (value: LunchBreakSetting) => {
+    const normalized = normalizeLunchBreak(value);
+    lunchBreak.value = normalized;
+    setStorage(STORAGE_KEYS.lunchBreak, normalized);
+  };
+
+  const setSalarySetting = (value: SalarySettings) => {
+    const normalized = normalizeSalarySettings(value);
+    salarySettings.value = normalized;
+    setStorage(STORAGE_KEYS.salarySettings, normalized);
+  };
+
+  const updateDisplaySettings = (value: Partial<DisplaySettings>) => {
+    const merged = normalizeDisplaySettings({
+      ...displaySettings.value,
+      ...value,
+    });
+    displaySettings.value = merged;
+    setStorage(STORAGE_KEYS.displaySettings, merged);
+  };
+
   const addCustomCountdown = (item: CountdownItem) => {
     customCountdowns.value = [...customCountdowns.value, item];
     setStorage(STORAGE_KEYS.customCountdowns, customCountdowns.value);
@@ -234,6 +319,9 @@ export const useCountdownStore = defineStore("countdown", () => {
     currentTime,
     currentDateInfo,
     workSchedule,
+    lunchBreak,
+    salarySettings,
+    displaySettings,
     workCountdown,
     majorHolidayCountdowns,
     customCountdowns,
@@ -242,6 +330,9 @@ export const useCountdownStore = defineStore("countdown", () => {
     holidaySyncTime,
     holidayLoading,
     setWorkSchedule,
+    setLunchBreakSetting,
+    setSalarySetting,
+    updateDisplaySettings,
     addCustomCountdown,
     updateCustomCountdown,
     removeCustomCountdown,

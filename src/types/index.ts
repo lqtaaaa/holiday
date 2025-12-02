@@ -4,6 +4,26 @@ export interface WorkSchedule {
   workdays: number[]; // 0-6, 0 for Sunday
 }
 
+export interface LunchBreakSetting {
+  enabled: boolean;
+  start: string;
+  end: string;
+}
+
+export type HolidayAdjustmentRule = "delay" | "advance" | "nearest" | "ignore";
+
+export interface SalarySettings {
+  day: number;
+  holidayRule: HolidayAdjustmentRule;
+}
+
+export type DisplayMode = "normal" | "stealth";
+
+export interface DisplaySettings {
+  showSeconds: boolean;
+  mode: DisplayMode;
+}
+
 export interface CountdownItem {
   id: string;
   name: string;

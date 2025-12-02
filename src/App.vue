@@ -23,10 +23,12 @@ onMounted(() => {
 </script>
 
 <template>
-  <template v-if="route === 'read'">
-    <Read :enterAction="enterAction"></Read>
-  </template>
-  <template v-if="route === 'write'">
-    <Write :enterAction="enterAction"></Write>
-  </template>
+  <n-message-provider>
+    <template v-if="route === 'read'">
+      <Read :enterAction="enterAction" />
+    </template>
+    <template v-if="route === 'write'">
+      <Write :enterAction="enterAction" />
+    </template>
+  </n-message-provider>
 </template>

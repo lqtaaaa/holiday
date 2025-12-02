@@ -1,78 +1,138 @@
-<script lang="ts" setup>
-import { computed, onMounted, onUnmounted } from 'vue';
-import { useCountdownStore } from '../store/useCountdownStore';
+﻿<script lang="ts" setup>
+import { computed, onMounted, onUnmounted } from "vue";
+import { storeToRefs } from "pinia";
+import ProgressBar from "../components/ProgressBar.vue";
+import PaydayCard from "../components/PaydayCard.vue";
+import StealthClock from "../components/StealthClock.vue";
+import { useCountdownStore } from "../store/useCountdownStore";
+import { useWorkProgress } from "../hooks/useWorkProgress";
+import { usePayday } from "../hooks/usePayday";
 
-const props = defineProps({
+defineProps({
   enterAction: {
     type: Object,
-    required: true
-  }
-})
+    required: true,
+  },
+});
 
-const store = useCountdownStore()
+const store = useCountdownStore();
+const { displaySettings, currentTime } = storeToRefs(store);
 
-const majorCountdowns = computed(() => store.majorHolidayCountdowns)
-const customCountdowns = computed(() => store.customCountdownDisplays)
-const workCountdown = computed(() => store.workCountdown)
-const currentDateInfo = computed(() => store.currentDateInfo)
+const majorCountdowns = computed(() => store.majorHolidayCountdowns);
+const customCountdowns = computed(() => store.customCountdownDisplays);
+const workCountdown = computed(() => store.workCountdown);
+const currentDateInfo = computed(() => store.currentDateInfo);
+
+const {
+  percent: workPercent,
+  palette: workPalette,
+  statusText: workStatusText,
+  workedText: workWorkedText,
+  totalText: workTotalText,
+  remainingText: workRemainingText,
+} = useWorkProgress();
+const { payday } = usePayday();
+
+const showSeconds = computed(() => displaySettings.value.showSeconds);
+const timeDisplay = computed(() =>
+  showSeconds.value ? currentDateInfo.value.time : currentDateInfo.value.timeSimple
+);
+const isStealthMode = computed(() => displaySettings.value.mode === "stealth");
+const isFriday = computed(() => currentTime.value.day() === 5);
+const stealthPaydayText = computed(() => payday.value?.message ?? "");
 
 const handleOpenSettings = () => {
   if (window.utools && window.utools.redirect) {
-    window.utools.redirect('假期设置', '')
+    window.utools.redirect("假期设置", "");
   }
-}
+};
 
-// 组件挂载时启动定时器
+const handleToggleStealth = () => {
+  store.updateDisplaySettings({
+    mode: displaySettings.value.mode === "stealth" ? "normal" : "stealth",
+  });
+};
+
 onMounted(() => {
-  store.startTicker()
-})
+  store.startTicker();
+});
 
-// 组件卸载时停止定时器
 onUnmounted(() => {
-  store.stopTicker()
-})
+  store.stopTicker();
+});
 </script>
 
 <template>
-  <div class="countdown-page">
-    <!-- 优化后的头部：大号时钟设计 -->
-    <header class="header">
+  <div
+    class="countdown-page"
+    :class="{ 'stealth-mode': isStealthMode }"
+    @dblclick.self="handleToggleStealth"
+  >
+    <header v-if="!isStealthMode" class="header">
       <div class="clock-block">
-        <div class="time-display">{{ currentDateInfo.time }}</div>
+        <div class="time-display">{{ timeDisplay }}</div>
         <div class="date-info">
           <span class="date-text">{{ currentDateInfo.date }}</span>
           <span class="lunar-text">{{ currentDateInfo.lunar }}</span>
         </div>
       </div>
-      <button class="settings-btn" @click="handleOpenSettings">
-        <span>⚙️</span>
-        <span>设置</span>
-      </button>
+      <div class="header-actions">
+        <button class="stealth-btn" title="切换摸鱼模式" @click="handleToggleStealth">👁</button>
+        <button class="settings-btn" @click="handleOpenSettings">
+          <span>⚙️</span>
+          <span>设置</span>
+        </button>
+      </div>
     </header>
 
-    <!-- 增强的下班倒计时 -->
-    <section class="work-section">
+    <section v-else class="stealth-header">
+      <StealthClock
+        :time="timeDisplay"
+        :date="currentDateInfo.date"
+        :lunar="currentDateInfo.lunar"
+        :status="workStatusText"
+        :remaining="workRemainingText"
+        :payday-text="stealthPaydayText"
+      />
+      <button class="stealth-exit" @click="handleToggleStealth">👀</button>
+    </section>
+
+    <section class="work-section" :class="{ 'friday-mode': isFriday }">
       <div v-if="workCountdown" class="work-card-enhanced">
-        <div class="work-icon">🏃</div>
+        <div class="work-icon">{{ isFriday ? '🎉' : '🏃' }}</div>
         <div class="work-content">
-          <div class="work-title">下班倒计时</div>
+          <div class="work-title">{{ isFriday ? '周五限定：坚持住！' : '下班倒计时' }}</div>
           <div class="work-time">{{ workCountdown.text }}</div>
-          <div class="work-target">{{ workCountdown.targetText }}</div>
+          <div class="work-target">目标：{{ workCountdown.targetText }}</div>
+          <ProgressBar
+            :percent="workPercent"
+            :palette="workPalette"
+            :status-text="workStatusText"
+            :worked-text="workWorkedText"
+            :total-text="workTotalText"
+            :remaining-text="workRemainingText"
+          />
         </div>
       </div>
       <div v-else class="work-card-empty">
-        <div class="empty-icon">⏰</div>
-        <div class="empty-text">暂无工作时间设置</div>
+        <div class="empty-icon">⏳</div>
+        <div class="empty-text">暂未配置工作时间</div>
         <div class="empty-hint">点击右上角设置添加</div>
+      </div>
+      <div class="payday-container" v-if="payday">
+        <PaydayCard
+          :diff-days="payday.diffDays"
+          :date-text="payday.dateText"
+          :message="payday.message"
+          :is-soon="payday.isSoon"
+        />
       </div>
     </section>
 
-    <!-- 优化的节日倒计时 -->
     <section class="holiday-section">
-      <h2 class="section-title">🎊 节日倒计时</h2>
+      <h2 class="section-title">🎉 节日倒计时</h2>
       <div class="holiday-grid">
-        <div v-for="(item, index) in majorCountdowns" :key="item.name" class="holiday-card">
-          <!-- 国庆卡片添加五星图案 -->
+        <div v-for="item in majorCountdowns" :key="item.id" class="holiday-card">
           <div v-if="item.name === '国庆'" class="flag-stars">
             <span class="big-star">★</span>
             <span class="small-star star-1">★</span>
@@ -90,14 +150,13 @@ onUnmounted(() => {
       </div>
     </section>
 
-    <!-- 优化的自定义倒计时 -->
     <section class="custom-section">
       <div class="section-header">
-        <h2 class="section-title">✨ 自定义倒计时</h2>
+        <h2 class="section-title">📝 自定义倒计时</h2>
         <div class="section-tips">在设置页添加</div>
       </div>
       <div v-if="customCountdowns.length" class="custom-grid">
-        <div v-for="item in customCountdowns" :key="item.name" class="custom-card">
+        <div v-for="item in customCountdowns" :key="item.id" class="custom-card">
           <div class="custom-name">{{ item.name }}</div>
           <div class="custom-date">{{ item.targetDate }}</div>
           <div class="custom-days">
@@ -125,7 +184,12 @@ onUnmounted(() => {
   min-height: 100vh;
 }
 
-/* ========== 头部样式 ========== */
+.countdown-page.stealth-mode {
+  background: #050505;
+  color: #e5e7eb;
+  font-family: "Fira Code", "JetBrains Mono", monospace;
+}
+
 .header {
   display: flex;
   align-items: center;
@@ -136,6 +200,42 @@ onUnmounted(() => {
   border-radius: 16px;
   box-shadow: 0 8px 24px rgba(102, 126, 234, 0.25);
   color: white;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.stealth-btn,
+.stealth-exit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  width: 38px;
+  height: 38px;
+  font-size: 16px;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.stealth-btn:hover,
+.stealth-exit:hover {
+  background: rgba(255, 255, 255, 0.35);
+  border-color: rgba(255, 255, 255, 0.7);
+  transform: scale(1.05);
+}
+
+.stealth-header {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
 }
 
 .clock-block {
@@ -159,15 +259,6 @@ onUnmounted(() => {
   opacity: 0.95;
 }
 
-.date-text {
-  font-weight: 500;
-}
-
-.lunar-text {
-  opacity: 0.85;
-  font-size: 14px;
-}
-
 .settings-btn {
   display: flex;
   align-items: center;
@@ -175,7 +266,6 @@ onUnmounted(() => {
   padding: 10px 16px;
   border: 2px solid rgba(255, 255, 255, 0.3);
   background: rgba(255, 255, 255, 0.15);
-  backdrop-filter: blur(10px);
   color: white;
   border-radius: 12px;
   cursor: pointer;
@@ -190,9 +280,11 @@ onUnmounted(() => {
   transform: translateY(-2px);
 }
 
-/* ========== 下班倒计时增强样式 ========== */
 .work-section {
   margin: 8px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 .work-card-enhanced {
@@ -207,9 +299,9 @@ onUnmounted(() => {
   transition: all 0.3s ease;
 }
 
-.work-card-enhanced:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 16px 40px rgba(245, 87, 108, 0.4);
+.friday-mode .work-card-enhanced {
+  background: linear-gradient(120deg, #7f5af0 0%, #00f5d4 100%);
+  box-shadow: 0 12px 34px rgba(0, 245, 212, 0.32);
 }
 
 .work-icon {
@@ -218,12 +310,18 @@ onUnmounted(() => {
 }
 
 @keyframes bounce {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-10px); }
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
 }
 
 .work-content {
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -239,7 +337,6 @@ onUnmounted(() => {
   font-size: 32px;
   font-weight: 700;
   letter-spacing: 1px;
-  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
 .work-target {
@@ -271,7 +368,10 @@ onUnmounted(() => {
   opacity: 0.7;
 }
 
-/* ========== 节日倒计时样式 ========== */
+.payday-container {
+  max-width: 420px;
+}
+
 .holiday-section,
 .custom-section {
   display: flex;
@@ -312,6 +412,8 @@ onUnmounted(() => {
   border: 2px solid transparent;
   transition: all 0.3s ease;
   cursor: pointer;
+  position: relative;
+  overflow: hidden;
 }
 
 .holiday-card:hover {
@@ -320,48 +422,36 @@ onUnmounted(() => {
   border-color: #667eea;
 }
 
-/* 根据节日顺序动态设置颜色 */
-/* 元旦 - 金橙色系（新年喜庆） */
 .holiday-card:nth-child(1) {
   background: linear-gradient(135deg, #ffd89b 0%, #f6a623 100%);
   color: #2d3436;
 }
 
-/* 春节 - 中国红（传统喜庆） */
 .holiday-card:nth-child(2) {
   background: linear-gradient(135deg, #ff6b6b 0%, #c92a2a 100%);
   color: white;
 }
 
-/* 清明 - 青灰色（肃穆追思） */
 .holiday-card:nth-child(3) {
   background: linear-gradient(135deg, #a8dadc 0%, #457b9d 100%);
   color: white;
 }
 
-/* 端午 - 绿色系（粽叶龙舟） */
 .holiday-card:nth-child(4) {
   background: linear-gradient(135deg, #51cf66 0%, #2f9e44 100%);
   color: white;
 }
 
-/* 中秋 - 金黄色（月饼圆月） */
 .holiday-card:nth-child(5) {
   background: linear-gradient(135deg, #ffd43b 0%, #fab005 100%);
   color: #2d3436;
 }
 
-/* 国庆 - 红色系（国旗红）+ 五星图案 */
 .holiday-card:nth-child(6) {
   background: linear-gradient(135deg, #de2910 0%, #c41e0f 100%);
   color: white;
-  position: relative;
-  overflow: hidden;
 }
 
-/* 移除伪元素，改用模板中的真实元素 */
-
-/* 五星图案容器 */
 .flag-stars {
   position: absolute;
   top: 0;
@@ -372,56 +462,41 @@ onUnmounted(() => {
   z-index: 0;
 }
 
-/* 按照国旗法标准计算（假设卡片160px高度）
-   左上方长方形：80px × 80px
-   横向15等分：5.33px/格，纵向10等分：8px/格 */
-
-.big-star {
+.big-star,
+.small-star {
   position: absolute;
-  /* 大星中心：上五下五、左五右十 = (5×5.33px, 5×8px) = (26.65px, 40px) */
-  top: calc(40px - 20px); /* 减去星星半径使中心对齐 */
-  left: calc(26.65px - 20px);
-  font-size: 40px; /* 直径 = 旗高3/10 = 48px，字体稍小 */
   color: #ffde00;
   opacity: 0.65;
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+}
+
+.big-star {
+  top: 20px;
+  left: 20px;
+  font-size: 40px;
 }
 
 .small-star {
-  position: absolute;
-  font-size: 13.3px; /* 直径 = 旗高1/10 = 16px */
-  color: #ffde00;
-  opacity: 0.65;
-  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.2));
+  font-size: 13px;
 }
 
-/* 四颗小星的精确位置（中心点坐标） */
 .star-1 {
-  /* 上二下八、左十右五 = (10×5.33px, 2×8px) = (53.3px, 16px) */
-  top: calc(16px - 6.65px);
-  left: calc(53.3px - 6.65px);
-  transform: rotate(-41deg); /* 角尖指向大星中心 */
+  top: 16px;
+  left: 72px;
 }
 
 .star-2 {
-  /* 上四下六、左十二右三 = (12×5.33px, 4×8px) = (64px, 32px) */
-  top: calc(32px - 6.65px);
-  left: calc(64px - 6.65px);
-  transform: rotate(-18deg);
+  top: 36px;
+  left: 90px;
 }
 
 .star-3 {
-  /* 上七下三、左十二右三 = (12×5.33px, 7×8px) = (64px, 56px) */
-  top: calc(56px - 6.65px);
-  left: calc(64px - 6.65px);
-  transform: rotate(18deg);
+  top: 60px;
+  left: 88px;
 }
 
 .star-4 {
-  /* 上九下一、左十右五 = (10×5.33px, 9×8px) = (53.3px, 72px) */
-  top: calc(72px - 6.65px);
-  left: calc(53.3px - 6.65px);
-  transform: rotate(41deg);
+  top: 84px;
+  left: 72px;
 }
 
 .holiday-name {
@@ -460,7 +535,6 @@ onUnmounted(() => {
   opacity: 0.9;
 }
 
-/* ========== 自定义倒计时样式 ========== */
 .custom-card {
   background: white;
   padding: 20px;
@@ -474,7 +548,6 @@ onUnmounted(() => {
 .custom-card:hover {
   transform: translateY(-4px);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-  border-left-width: 6px;
 }
 
 .custom-name {
@@ -505,39 +578,36 @@ onUnmounted(() => {
   color: #9ca3af;
 }
 
-/* ========== 深色模式 ========== */
+.countdown-page.stealth-mode .work-card-enhanced,
+.countdown-page.stealth-mode .holiday-card,
+.countdown-page.stealth-mode .custom-card,
+.countdown-page.stealth-mode .work-card-empty,
+.countdown-page.stealth-mode .custom-empty {
+  background: #0f172a;
+  color: #e5e7eb;
+  border: 1px solid #1f2937;
+  box-shadow: none;
+}
+
+.countdown-page.stealth-mode .holiday-name,
+.countdown-page.stealth-mode .holiday-date,
+.countdown-page.stealth-mode .custom-name,
+.countdown-page.stealth-mode .custom-date {
+  color: #e5e7eb;
+}
+
 @media (prefers-color-scheme: dark) {
-  .countdown-page {
+  .countdown-page:not(.stealth-mode) {
     background: linear-gradient(180deg, #1a1a1a 0%, #0f0f0f 100%);
   }
-
   .section-title {
     color: #e5e7eb;
   }
-
   .holiday-card,
   .custom-card,
   .custom-empty {
     background: #1f2937;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  }
-
-  .holiday-card:hover,
-  .custom-card:hover {
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
-  }
-
-  .custom-name {
-    color: #e5e7eb;
-  }
-
-  .custom-date {
-    color: #9ca3af;
-  }
-
-  .work-card-empty {
-    background: linear-gradient(135deg, #374151 0%, #1f2937 100%);
-    color: #9ca3af;
   }
 }
 </style>
