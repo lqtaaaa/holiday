@@ -1,6 +1,6 @@
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
-import dayjs, { formatDuration } from "../utils/time";
+import dayjs, { formatCompactDuration, formatDuration } from "../utils/time";
 import { getStorage, removeStorage, setStorage } from "../utils/storage";
 import type {
   CountdownDisplayItem,
@@ -12,7 +12,7 @@ import type {
   WorkSchedule,
 } from "../types";
 import { getLunarText } from "../utils/lunar";
-import { ensureMajorHolidayEvents, parseHolidayICS } from "../utils/holiday";
+import { ensureMajorHolidayEvents } from "../utils/holiday";
 import {
   findNextWorkSession,
   summarizeWorkProgress,
@@ -97,9 +97,19 @@ function normalizeDisplaySettings(
   };
 }
 
+function resolveWorkPalette(percent: number, phase: string | null): string {
+  if (phase === "lunch") return "paused";
+  if (percent >= 90) return "finish";
+  if (percent >= 70) return "late";
+  if (percent >= 30) return "mid";
+  if (percent > 0) return "early";
+  return "before";
+}
 
 export const useCountdownStore = defineStore("countdown", () => {
   const currentTime = ref(dayjs());
+  const currentDate = ref(currentTime.value.startOf("day"));
+  const currentDateKey = ref(currentDate.value.format("YYYY-MM-DD"));
   const timer = ref<number | null>(null);
   const lunarCache = ref<{ dateKey: string; text: string }>({
     dateKey: "",
@@ -156,28 +166,82 @@ export const useCountdownStore = defineStore("countdown", () => {
     return lunarCache.value.text;
   });
 
+  const updateNow = () => {
+    const now = dayjs();
+    currentTime.value = now;
+    const key = now.format("YYYY-MM-DD");
+    if (key !== currentDateKey.value) {
+      currentDateKey.value = key;
+      currentDate.value = now.startOf("day");
+    }
+  };
+
   const startTicker = () => {
     stopTicker();
     timer.value = window.setInterval(() => {
-      currentTime.value = dayjs();
+      updateNow();
     }, 1000);
+    updateNow();
   };
 
   const stopTicker = () => {
-    if (timer.value) {
+    if (timer.value !== null) {
       window.clearInterval(timer.value);
       timer.value = null;
     }
   };
 
-  const workCountdown = computed(() => {
+  const workProgressSnapshot = computed(() => {
     const session = findNextWorkSession(
       currentTime.value,
       workSchedule.value,
       lunchBreak.value
     );
     if (!session) return null;
-    const snapshot = summarizeWorkProgress(currentTime.value, session);
+    return summarizeWorkProgress(currentTime.value, session);
+  });
+
+  const workProgressPercent = computed(() => {
+    const summary = workProgressSnapshot.value;
+    if (!summary || !summary.totalMs) return 0;
+    return Math.min(100, Math.max(0, (summary.workedMs / summary.totalMs) * 100));
+  });
+
+  const workProgressPalette = computed(() => {
+    const summary = workProgressSnapshot.value;
+    return resolveWorkPalette(workProgressPercent.value, summary?.phase ?? null);
+  });
+
+  const workProgressStatusText = computed(() => {
+    const summary = workProgressSnapshot.value;
+    if (!summary) return "尚未配置工时";
+    switch (summary.phase) {
+      case "working":
+        return "专注搬砖中";
+      case "lunch":
+        return "午休充电中";
+      case "after":
+        return "今日已完成";
+      case "before":
+      default:
+        return summary.session.isToday ? "等待今日开工" : "下一班次待命";
+    }
+  });
+
+  const workProgressWorkedText = computed(() =>
+    formatCompactDuration(workProgressSnapshot.value?.workedMs ?? 0)
+  );
+  const workProgressRemainingText = computed(() =>
+    formatCompactDuration(workProgressSnapshot.value?.remainingMs ?? 0)
+  );
+  const workProgressTotalText = computed(() =>
+    formatCompactDuration(workProgressSnapshot.value?.totalMs ?? 0)
+  );
+
+  const workCountdown = computed(() => {
+    const snapshot = workProgressSnapshot.value;
+    if (!snapshot) return null;
+    const session = snapshot.session;
     const diffMs = snapshot.remainingMs;
     return {
       target: session.end.toISOString(),
@@ -208,7 +272,7 @@ export const useCountdownStore = defineStore("countdown", () => {
     return ensured
       .map((event) => {
         const target = dayjs(event.date).startOf("day");
-        const diffMs = target.diff(currentTime.value);
+        const diffMs = target.diff(currentDate.value);
         return {
           id: event.id,
           name: event.name,
@@ -224,7 +288,7 @@ export const useCountdownStore = defineStore("countdown", () => {
     return customCountdowns.value
       .map((item) => {
         const target = dayjs(item.date).startOf("day");
-        const diffMs = target.diff(currentTime.value);
+        const diffMs = target.diff(currentDate.value);
         return {
           id: item.id,
           name: item.name,
@@ -295,17 +359,13 @@ export const useCountdownStore = defineStore("countdown", () => {
     removeStorage(STORAGE_KEYS.customCountdowns);
   };
 
-  const syncHolidayFromICS = (icsText: string) => {
-    try {
-      holidayLoading.value = true;
-      const parsed = parseHolidayICS(icsText);
-      holidayEvents.value = parsed;
-      holidaySyncTime.value = dayjs().toISOString();
-      setStorage(STORAGE_KEYS.holidayEvents, parsed);
-      setStorage(STORAGE_KEYS.holidaySyncTime, holidaySyncTime.value);
-    } finally {
-      holidayLoading.value = false;
-    }
+  const syncHolidayFromICS = async (icsText: string) => {
+    const { parseHolidayICS } = await import("../utils/holidayIcs");
+    const parsed = parseHolidayICS(icsText);
+    holidayEvents.value = parsed;
+    holidaySyncTime.value = dayjs().toISOString();
+    setStorage(STORAGE_KEYS.holidayEvents, parsed);
+    setStorage(STORAGE_KEYS.holidaySyncTime, holidaySyncTime.value);
   };
 
   const resetHolidayEvents = () => {
@@ -322,6 +382,13 @@ export const useCountdownStore = defineStore("countdown", () => {
     lunchBreak,
     salarySettings,
     displaySettings,
+    workProgressSnapshot,
+    workProgressPercent,
+    workProgressPalette,
+    workProgressStatusText,
+    workProgressWorkedText,
+    workProgressRemainingText,
+    workProgressTotalText,
     workCountdown,
     majorHolidayCountdowns,
     customCountdowns,

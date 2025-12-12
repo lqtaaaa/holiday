@@ -1,13 +1,15 @@
 <script lang="ts" setup>
-import { onMounted, ref } from 'vue';
+import { defineAsyncComponent, onMounted, ref } from 'vue';
 import Read from './Read/index.vue'
-import Write from './Write/index.vue'
+import { getUtools } from './utils/utools'
+
+const WriteEntry = defineAsyncComponent(() => import("./Write/WriteEntry.vue"))
 
 const route = ref('')
 const enterAction = ref({})
 
 onMounted(() => {
-  const utools = window.utools
+  const utools = getUtools()
   if (utools?.onPluginEnter && utools.onPluginOut) {
     utools.onPluginEnter((action) => {
       route.value = action.code
@@ -23,12 +25,10 @@ onMounted(() => {
 </script>
 
 <template>
-  <n-message-provider>
-    <template v-if="route === 'read'">
-      <Read :enterAction="enterAction" />
-    </template>
-    <template v-if="route === 'write'">
-      <Write :enterAction="enterAction" />
-    </template>
-  </n-message-provider>
+  <template v-if="route === 'read'">
+    <Read :enterAction="enterAction" />
+  </template>
+  <template v-if="route === 'write'">
+    <WriteEntry :enterAction="enterAction" />
+  </template>
 </template>

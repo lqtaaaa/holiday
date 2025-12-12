@@ -11,5 +11,20 @@ export default defineConfig({
       resolvers: [NaiveUiResolver()]
     })
   ],
-  base: "./"
+  base: "./",
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return;
+          if (id.includes("naive-ui")) return "naive-ui";
+          if (id.includes("ical.js")) return "ical";
+          if (id.includes("dayjs") || id.includes("dayjs-plugin-lunar")) return "dayjs";
+          if (id.includes("pinia")) return "pinia";
+          if (id.includes("vue") || id.includes("@vue")) return "vue";
+          return "vendor";
+        }
+      }
+    }
+  }
 });

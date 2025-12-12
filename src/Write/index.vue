@@ -5,6 +5,7 @@ import { useMessage } from "naive-ui";
 import { useCountdownStore } from "../store/useCountdownStore";
 import { createId } from "../utils/id";
 import dayjs from "../utils/time";
+import { getUtools } from "../utils/utools";
 
 defineProps({
   enterAction: {
@@ -126,6 +127,41 @@ const sortedCustomCountdowns = computed(() =>
 const customCount = computed(() => customCountdowns.value.length);
 
 const ICS_URL = "https://cdn.jsdelivr.net/npm/chinese-days/dist/holidays.ics";
+const HOLIDAY_SYNC_INTERVAL_HOURS = 24;
+const HOLIDAY_FETCH_TIMEOUT_MS = 8000;
+const HOLIDAY_FETCH_RETRIES = 2;
+
+async function fetchTextWithTimeout(url: string, timeoutMs: number): Promise<string> {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, {
+      signal: controller.signal,
+      cache: "no-store",
+    });
+    if (!response.ok) {
+      throw new Error(`请求失败(${response.status})`);
+    }
+    return await response.text();
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
+async function loadHolidayICS(): Promise<string> {
+  let lastError: unknown = null;
+  for (let attempt = 1; attempt <= HOLIDAY_FETCH_RETRIES; attempt++) {
+    try {
+      return await fetchTextWithTimeout(ICS_URL, HOLIDAY_FETCH_TIMEOUT_MS);
+    } catch (error) {
+      lastError = error;
+      if (attempt < HOLIDAY_FETCH_RETRIES) {
+        await new Promise((resolve) => window.setTimeout(resolve, 500 * attempt));
+      }
+    }
+  }
+  throw lastError;
+}
 
 const lastSyncTime = computed(() => {
   if (!holidaySyncTime.value) return "未同步";
@@ -219,14 +255,28 @@ const handleClearCustom = () => {
 };
 
 const handleSyncHoliday = async () => {
+  if (holidaySyncTime.value) {
+    const diffHours = dayjs().diff(dayjs(holidaySyncTime.value), "hour");
+    if (diffHours < HOLIDAY_SYNC_INTERVAL_HOURS) {
+      message.info(`距离上次同步不足 ${HOLIDAY_SYNC_INTERVAL_HOURS} 小时，无需重复同步`);
+      return;
+    }
+  }
+
   try {
-    const response = await fetch(ICS_URL);
-    if (!response.ok) throw new Error("请求失败");
-    store.syncHolidayFromICS(await response.text());
+    holidayLoading.value = true;
+    const icsText = await loadHolidayICS();
+    await store.syncHolidayFromICS(icsText);
     message.success("节假日数据已同步");
   } catch (error) {
     console.error("[syncHoliday]", error);
-    message.error("节假日同步失败");
+    if ((error as any)?.name === "AbortError") {
+      message.error("节假日同步超时，请稍后重试");
+    } else {
+      message.error("节假日同步失败");
+    }
+  } finally {
+    holidayLoading.value = false;
   }
 };
 
@@ -236,8 +286,9 @@ const handleClearHoliday = () => {
 };
 
 const handleBack = () => {
-  if (window.utools && window.utools.redirect) {
-    window.utools.redirect("假期星图", "");
+  const api = getUtools();
+  if (api?.redirect) {
+    api.redirect("假期星图", "");
     return;
   }
   window.history.back();

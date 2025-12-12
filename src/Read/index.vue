@@ -7,6 +7,7 @@ import StealthClock from "../components/StealthClock.vue";
 import { useCountdownStore } from "../store/useCountdownStore";
 import { useWorkProgress } from "../hooks/useWorkProgress";
 import { usePayday } from "../hooks/usePayday";
+import { withUtools } from "../utils/utools";
 
 defineProps({
   enterAction: {
@@ -42,9 +43,7 @@ const isFriday = computed(() => currentTime.value.day() === 5);
 const stealthPaydayText = computed(() => payday.value?.message ?? "");
 
 const handleOpenSettings = () => {
-  if (window.utools && window.utools.redirect) {
-    window.utools.redirect("假期设置", "");
-  }
+  withUtools((api) => api.redirect?.("假期设置", ""));
 };
 
 const handleToggleStealth = () => {

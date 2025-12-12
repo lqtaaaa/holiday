@@ -1,5 +1,4 @@
 import dayjs from "./time";
-import ICAL from "ical.js";
 import type { HolidayEvent } from "../types";
 
 interface MajorHolidayConfig {
@@ -17,11 +16,6 @@ const MAJOR_HOLIDAYS: MajorHolidayConfig[] = [
   { name: "中秋", type: "lunar", month: 8, day: 15 },
   { name: "国庆", type: "solar", month: 10, day: 1 },
 ];
-
-function ensureDateString(date: Date | null | undefined): string | null {
-  if (!date) return null;
-  return dayjs(date).format("YYYY-MM-DD");
-}
 
 function calculateQingming(year: number): dayjs.Dayjs {
   // 基于常用的清明节算法：Y * 0.2422 + 4.81 - floor((Y-1)/4)
@@ -50,43 +44,6 @@ function computeFallbackDate(config: MajorHolidayConfig, year: number): dayjs.Da
     console.error("[holiday:fallback]", config.name, year, error);
   }
   return dayjs().year(year).startOf("year");
-}
-
-export function parseHolidayICS(icsText: string): HolidayEvent[] {
-  if (!icsText) return [];
-  try {
-    const jcalData = ICAL.parse(icsText);
-    const component = new ICAL.Component(jcalData);
-    const events = component.getAllSubcomponents("vevent") || [];
-
-    const mapped: HolidayEvent[] = events
-      .map((vevent) => {
-        const event = new ICAL.Event(vevent);
-        const date = event.startDate ? event.startDate.toJSDate() : null;
-        const dayString = ensureDateString(date);
-        if (!event.summary || !dayString) return null;
-        return {
-          id: event.uid || `${event.summary}-${dayString}`,
-          name: event.summary,
-          date: dayString,
-          source: "ics",
-        } as HolidayEvent;
-      })
-      .filter((item): item is HolidayEvent => Boolean(item));
-
-    const uniqueMap = new Map<string, HolidayEvent>();
-    mapped.forEach((item) => {
-      const key = `${item.name}-${item.date}`;
-      uniqueMap.set(key, item);
-    });
-
-    return Array.from(uniqueMap.values()).sort((a, b) =>
-      dayjs(a.date).valueOf() - dayjs(b.date).valueOf()
-    );
-  } catch (error) {
-    console.error("[holiday:parse] failed", error);
-    return [];
-  }
 }
 
 function findNextEvent(
