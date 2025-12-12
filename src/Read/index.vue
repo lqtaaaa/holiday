@@ -1,5 +1,5 @@
 ﻿<script lang="ts" setup>
-import { computed, onMounted, onUnmounted } from "vue";
+import { computed, onMounted, onUnmounted, watch, ref } from "vue";
 import { storeToRefs } from "pinia";
 import ProgressBar from "../components/ProgressBar.vue";
 import PaydayCard from "../components/PaydayCard.vue";
@@ -8,6 +8,7 @@ import { useCountdownStore } from "../store/useCountdownStore";
 import { useWorkProgress } from "../hooks/useWorkProgress";
 import { usePayday } from "../hooks/usePayday";
 import { withUtools } from "../utils/utools";
+import { fireConfetti, isFullscreenConfettiSupported } from "../utils/confetti";
 
 defineProps({
   enterAction: {
@@ -17,7 +18,7 @@ defineProps({
 });
 
 const store = useCountdownStore();
-const { displaySettings, currentTime } = storeToRefs(store);
+const { displaySettings, confettiSettings, currentTime } = storeToRefs(store);
 
 const majorCountdowns = computed(() => store.majorHolidayCountdowns);
 const customCountdowns = computed(() => store.customCountdownDisplays);
@@ -42,6 +43,9 @@ const isStealthMode = computed(() => displaySettings.value.mode === "stealth");
 const isFriday = computed(() => currentTime.value.day() === 5);
 const stealthPaydayText = computed(() => payday.value?.message ?? "");
 
+// 记录上一次的工作阶段，用于检测下班时刻
+const previousPhase = ref<string | null>(null);
+
 const handleOpenSettings = () => {
   withUtools((api) => api.redirect?.("假期设置", ""));
 };
@@ -51,6 +55,65 @@ const handleToggleStealth = () => {
     mode: displaySettings.value.mode === "stealth" ? "normal" : "stealth",
   });
 };
+
+// 触发下班庆祝礼花
+const triggerOffWorkCelebration = () => {
+  if (!confettiSettings.value.enabled) return;
+
+  const today = currentTime.value.format("YYYY-MM-DD");
+
+  // 防止同一天重复触发
+  if (store.hasTriggeredConfettiToday(today)) return;
+
+  // 记录触发
+  store.recordConfettiTrigger(today);
+
+  // 触发礼花
+  fireConfetti({
+    colorScheme: confettiSettings.value.colorScheme,
+    intensity: confettiSettings.value.intensity,
+    fullscreen: confettiSettings.value.fullscreen,
+    duration: 3000,
+  });
+};
+
+// 手动触发礼花（双击彩蛋）
+const handleManualConfetti = (event: Event) => {
+  event.stopPropagation();
+  event.preventDefault();
+
+  if (!confettiSettings.value.enabled) return;
+
+  // 使用 setTimeout 延迟执行，避免影响主窗口
+  setTimeout(() => {
+    fireConfetti({
+      colorScheme: confettiSettings.value.colorScheme,
+      intensity: confettiSettings.value.intensity,
+      fullscreen: confettiSettings.value.fullscreen,
+      duration: 2000, // 手动触发时间稍短
+    });
+  }, 50);
+};
+
+// 监听工作状态变化，检测下班时刻
+watch(
+  () => workCountdown.value,
+  (newVal, oldVal) => {
+    if (!newVal) return;
+
+    const currentPhase = newVal.phase;
+    const prevPhase = previousPhase.value;
+
+    // 更新上一次阶段
+    previousPhase.value = currentPhase;
+
+    // 检测从 working 变为 after（下班了）
+    if (prevPhase === "working" && currentPhase === "after") {
+      triggerOffWorkCelebration();
+    }
+  },
+  { immediate: true }
+);
 
 onMounted(() => {
   store.startTicker();
@@ -97,7 +160,12 @@ onUnmounted(() => {
     </section>
 
     <section class="work-section" :class="{ 'friday-mode': isFriday }">
-      <div v-if="workCountdown" class="work-card-enhanced">
+      <div
+        v-if="workCountdown"
+        class="work-card-enhanced"
+        @dblclick.stop.prevent="handleManualConfetti"
+        title="双击触发礼花 🎉"
+      >
         <div class="work-icon">{{ isFriday ? '🎉' : '🏃' }}</div>
         <div class="work-content">
           <div class="work-title">{{ isFriday ? '周五限定：坚持住！' : '下班倒计时' }}</div>

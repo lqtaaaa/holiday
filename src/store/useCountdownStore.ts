@@ -3,6 +3,7 @@ import { computed, ref } from "vue";
 import dayjs, { formatCompactDuration, formatDuration } from "../utils/time";
 import { getStorage, removeStorage, setStorage } from "../utils/storage";
 import type {
+  ConfettiSettings,
   CountdownDisplayItem,
   CountdownItem,
   DisplaySettings,
@@ -26,6 +27,7 @@ const STORAGE_KEYS = {
   customCountdowns: "customCountdowns",
   holidayEvents: "holidayEvents",
   holidaySyncTime: "holidaySyncTime",
+  confettiSettings: "confettiSettings",
 } as const;
 
 const DEFAULT_WORK_SCHEDULE: WorkSchedule = {
@@ -48,6 +50,13 @@ const DEFAULT_SALARY_SETTINGS: SalarySettings = {
 const DEFAULT_DISPLAY_SETTINGS: DisplaySettings = {
   showSeconds: false,
   mode: "normal",
+};
+
+const DEFAULT_CONFETTI_SETTINGS: ConfettiSettings = {
+  enabled: true,
+  colorScheme: "classic",
+  intensity: "medium",
+  fullscreen: true,
 };
 
 function normalizeLunchBreak(
@@ -94,6 +103,43 @@ function normalizeDisplaySettings(
         ? value.showSeconds
         : DEFAULT_DISPLAY_SETTINGS.showSeconds,
     mode: value.mode === "stealth" ? "stealth" : "normal",
+  };
+}
+
+function normalizeConfettiSettings(
+  value?: Partial<ConfettiSettings> | null
+): ConfettiSettings {
+  if (!value) return { ...DEFAULT_CONFETTI_SETTINGS };
+  const validColorSchemes: ConfettiSettings["colorScheme"][] = [
+    "classic",
+    "golden",
+    "purple",
+    "rainbow",
+  ];
+  const validIntensities: ConfettiSettings["intensity"][] = [
+    "low",
+    "medium",
+    "high",
+  ];
+  return {
+    enabled:
+      typeof value.enabled === "boolean"
+        ? value.enabled
+        : DEFAULT_CONFETTI_SETTINGS.enabled,
+    colorScheme: validColorSchemes.includes(
+      value.colorScheme as ConfettiSettings["colorScheme"]
+    )
+      ? (value.colorScheme as ConfettiSettings["colorScheme"])
+      : DEFAULT_CONFETTI_SETTINGS.colorScheme,
+    intensity: validIntensities.includes(
+      value.intensity as ConfettiSettings["intensity"]
+    )
+      ? (value.intensity as ConfettiSettings["intensity"])
+      : DEFAULT_CONFETTI_SETTINGS.intensity,
+    fullscreen:
+      typeof value.fullscreen === "boolean"
+        ? value.fullscreen
+        : DEFAULT_CONFETTI_SETTINGS.fullscreen,
   };
 }
 
@@ -153,6 +199,16 @@ export const useCountdownStore = defineStore("countdown", () => {
     getStorage<string | null>(STORAGE_KEYS.holidaySyncTime, null)
   );
   const holidayLoading = ref(false);
+  const confettiSettings = ref<ConfettiSettings>(
+    normalizeConfettiSettings(
+      getStorage<ConfettiSettings | null>(
+        STORAGE_KEYS.confettiSettings,
+        DEFAULT_CONFETTI_SETTINGS
+      )
+    )
+  );
+  // 礼花触发记录（防止同一天重复触发）
+  const lastConfettiTriggerDate = ref<string | null>(null);
 
   const lunarText = computed(() => {
     const now = currentTime.value;
@@ -337,6 +393,23 @@ export const useCountdownStore = defineStore("countdown", () => {
     setStorage(STORAGE_KEYS.displaySettings, merged);
   };
 
+  const updateConfettiSettings = (value: Partial<ConfettiSettings>) => {
+    const merged = normalizeConfettiSettings({
+      ...confettiSettings.value,
+      ...value,
+    });
+    confettiSettings.value = merged;
+    setStorage(STORAGE_KEYS.confettiSettings, merged);
+  };
+
+  const recordConfettiTrigger = (dateKey: string) => {
+    lastConfettiTriggerDate.value = dateKey;
+  };
+
+  const hasTriggeredConfettiToday = (dateKey: string) => {
+    return lastConfettiTriggerDate.value === dateKey;
+  };
+
   const addCustomCountdown = (item: CountdownItem) => {
     customCountdowns.value = [...customCountdowns.value, item];
     setStorage(STORAGE_KEYS.customCountdowns, customCountdowns.value);
@@ -382,6 +455,7 @@ export const useCountdownStore = defineStore("countdown", () => {
     lunchBreak,
     salarySettings,
     displaySettings,
+    confettiSettings,
     workProgressSnapshot,
     workProgressPercent,
     workProgressPalette,
@@ -400,6 +474,9 @@ export const useCountdownStore = defineStore("countdown", () => {
     setLunchBreakSetting,
     setSalarySetting,
     updateDisplaySettings,
+    updateConfettiSettings,
+    recordConfettiTrigger,
+    hasTriggeredConfettiToday,
     addCustomCountdown,
     updateCustomCountdown,
     removeCustomCountdown,

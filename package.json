@@ -1,11 +1,12 @@
 {
   "type": "module",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "scripts": {
     "dev": "vite",
     "build": "vite build"
   },
   "dependencies": {
+    "canvas-confetti": "^1.9.4",
     "dayjs": "^1.11.13",
     "dayjs-plugin-lunar": "^1.4.1",
     "ical.js": "^2.2.1",

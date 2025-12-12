@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Confetti Celebration</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      background: transparent;
+      overflow: hidden;
+    }
+    #confetti-canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="confetti-canvas"></canvas>
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.4/dist/confetti.browser.min.js"></script>
+  <script>
+    // 从 URL 参数获取配置
+    const params = new URLSearchParams(window.location.search);
+    const colorScheme = params.get('colors') || 'classic';
+    const intensity = params.get('intensity') || 'medium';
+    const duration = parseInt(params.get('duration') || '3000');
+
+    // 颜色预设
+    const colorPresets = {
+      classic: ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff', '#00ffff', '#ff6600', '#9933ff'],
+      golden: ['#ffd700', '#ffb347', '#ff8c00', '#ffa500', '#ffcc00', '#ffe066', '#ffdb4d'],
+      purple: ['#667eea', '#764ba2', '#f093fb', '#f5576c', '#a855f7', '#7c3aed'],
+      rainbow: ['#ff0000', '#ff7f00', '#ffff00', '#00ff00', '#0000ff', '#4b0082', '#8f00ff', '#ff1493']
+    };
+
+    // 强度配置
+    const intensityConfig = {
+      low: { particleCount: 30, spread: 55, startVelocity: 25 },
+      medium: { particleCount: 60, spread: 70, startVelocity: 35 },
+      high: { particleCount: 100, spread: 90, startVelocity: 45 }
+    };
+
+    const colors = colorPresets[colorScheme] || colorPresets.classic;
+    const config = intensityConfig[intensity] || intensityConfig.medium;
+
+    // 初始化 canvas-confetti
+    const canvas = document.getElementById('confetti-canvas');
+    const myConfetti = confetti.create(canvas, {
+      resize: true,
+      useWorker: true
+    });
+
+    // 发射礼花
+    function fire() {
+      const end = Date.now() + duration;
+
+      (function frame() {
+        // 从左边发射
+        myConfetti({
+          particleCount: Math.floor(config.particleCount / 4),
+          angle: 60,
+          spread: config.spread,
+          startVelocity: config.startVelocity,
+          origin: { x: 0, y: 0.7 },
+          colors: colors,
+          ticks: 300,
+          gravity: 0.8,
+          decay: 0.94
+        });
+
+        // 从右边发射
+        myConfetti({
+          particleCount: Math.floor(config.particleCount / 4),
+          angle: 120,
+          spread: config.spread,
+          startVelocity: config.startVelocity,
+          origin: { x: 1, y: 0.7 },
+          colors: colors,
+          ticks: 300,
+          gravity: 0.8,
+          decay: 0.94
+        });
+
+        // 从底部中间发射
+        myConfetti({
+          particleCount: Math.floor(config.particleCount / 4),
+          angle: 90,
+          spread: config.spread + 20,
+          startVelocity: config.startVelocity + 10,
+          origin: { x: 0.5, y: 1 },
+          colors: colors,
+          ticks: 300,
+          gravity: 0.8,
+          decay: 0.94
+        });
+
+        // 随机位置爆发
+        if (Math.random() < 0.3) {
+          myConfetti({
+            particleCount: Math.floor(config.particleCount / 6),
+            spread: 360,
+            startVelocity: 20,
+            origin: { x: Math.random(), y: Math.random() * 0.5 + 0.2 },
+            colors: colors,
+            ticks: 200,
+            gravity: 1,
+            decay: 0.9
+          });
+        }
+
+        if (Date.now() < end) {
+          requestAnimationFrame(frame);
+        }
+      }());
+    }
+
+    // 开始播放礼花
+    fire();
+  </script>
+</body>
+</html>

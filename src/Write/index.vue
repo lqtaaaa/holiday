@@ -6,6 +6,8 @@ import { useCountdownStore } from "../store/useCountdownStore";
 import { createId } from "../utils/id";
 import dayjs from "../utils/time";
 import { getUtools } from "../utils/utools";
+import { fireConfetti, isFullscreenConfettiSupported } from "../utils/confetti";
+import type { ConfettiColorScheme, ConfettiIntensity } from "../types";
 
 defineProps({
   enterAction: {
@@ -22,6 +24,7 @@ const {
   lunchBreak,
   salarySettings,
   displaySettings,
+  confettiSettings,
   customCountdowns,
   holidaySyncTime,
   holidayLoading,
@@ -47,6 +50,13 @@ const salaryForm = reactive({
 const displayForm = reactive({
   showSeconds: false,
   mode: "normal" as "normal" | "stealth",
+});
+
+const confettiForm = reactive({
+  enabled: true,
+  colorScheme: "classic" as ConfettiColorScheme,
+  intensity: "medium" as ConfettiIntensity,
+  fullscreen: true,
 });
 
 const customForm = reactive({
@@ -97,6 +107,18 @@ watch(
   { immediate: true, deep: true }
 );
 
+watch(
+  confettiSettings,
+  (value) => {
+    if (!value) return;
+    confettiForm.enabled = value.enabled;
+    confettiForm.colorScheme = value.colorScheme;
+    confettiForm.intensity = value.intensity;
+    confettiForm.fullscreen = value.fullscreen;
+  },
+  { immediate: true, deep: true }
+);
+
 const workdayOptions = [
   { label: "周一", value: 1 },
   { label: "周二", value: 2 },
@@ -117,6 +139,19 @@ const holidayRuleOptions = [
 const modeOptions = [
   { label: "标准模式", value: "normal" },
   { label: "摸鱼模式", value: "stealth" },
+];
+
+const colorSchemeOptions = [
+  { label: "经典彩色", value: "classic" },
+  { label: "金色璀璨", value: "golden" },
+  { label: "梦幻紫色", value: "purple" },
+  { label: "彩虹渐变", value: "rainbow" },
+];
+
+const intensityOptions = [
+  { label: "轻柔", value: "low" },
+  { label: "适中", value: "medium" },
+  { label: "热烈", value: "high" },
 ];
 
 const sortedCustomCountdowns = computed(() =>
@@ -173,6 +208,7 @@ const savingFlags = reactive({
   lunch: false,
   salary: false,
   display: false,
+  confetti: false,
 });
 
 function validateRange(start: string, end: string) {
@@ -225,6 +261,23 @@ const saveDisplaySettings = async () => {
   await nextTick();
   savingFlags.display = false;
   message.success("显示偏好已更新");
+};
+
+const saveConfettiSettings = async () => {
+  savingFlags.confetti = true;
+  store.updateConfettiSettings({ ...confettiForm });
+  await nextTick();
+  savingFlags.confetti = false;
+  message.success("礼花设置已更新");
+};
+
+const handleTestConfetti = () => {
+  fireConfetti({
+    colorScheme: confettiForm.colorScheme,
+    intensity: confettiForm.intensity,
+    fullscreen: confettiForm.fullscreen,
+    duration: 2000,
+  });
 };
 
 const handleAddCustom = () => {
@@ -416,6 +469,48 @@ const handleBack = () => {
         </n-form>
         <n-button type="primary" quaternary :loading="savingFlags.display" @click="saveDisplaySettings">
           保存显示偏好
+        </n-button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-header">
+        <h2>🎉 下班礼花</h2>
+        <span>下班时刻自动庆祝</span>
+      </div>
+      <n-form label-placement="top" :model="confettiForm">
+        <div class="grid-inline">
+          <n-form-item label="启用礼花">
+            <n-switch v-model:value="confettiForm.enabled" />
+          </n-form-item>
+          <n-form-item label="全屏显示">
+            <n-switch
+              v-model:value="confettiForm.fullscreen"
+              :disabled="!confettiForm.enabled"
+            />
+          </n-form-item>
+          <n-form-item label="颜色方案">
+            <n-select
+              v-model:value="confettiForm.colorScheme"
+              :options="colorSchemeOptions"
+              :disabled="!confettiForm.enabled"
+            />
+          </n-form-item>
+          <n-form-item label="礼花强度">
+            <n-select
+              v-model:value="confettiForm.intensity"
+              :options="intensityOptions"
+              :disabled="!confettiForm.enabled"
+            />
+          </n-form-item>
+        </div>
+      </n-form>
+      <div class="action-row">
+        <n-button type="primary" :loading="savingFlags.confetti" @click="saveConfettiSettings">
+          保存礼花设置
+        </n-button>
+        <n-button type="success" tertiary :disabled="!confettiForm.enabled" @click="handleTestConfetti">
+          🎊 测试效果
         </n-button>
       </div>
     </section>

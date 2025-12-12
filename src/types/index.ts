@@ -45,3 +45,17 @@ export interface CountdownDisplayItem {
   diffDays: number;
   diffText: string;
 }
+
+// 礼花颜色方案
+export type ConfettiColorScheme = 'classic' | 'golden' | 'purple' | 'rainbow';
+
+// 礼花强度
+export type ConfettiIntensity = 'low' | 'medium' | 'high';
+
+// 礼花设置
+export interface ConfettiSettings {
+  enabled: boolean;
+  colorScheme: ConfettiColorScheme;
+  intensity: ConfettiIntensity;
+  fullscreen: boolean;
+}
