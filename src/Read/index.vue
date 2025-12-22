@@ -200,7 +200,7 @@ onUnmounted(() => {
       <h2 class="section-title">🎉 节日倒计时</h2>
       <div class="holiday-grid">
         <div v-for="item in majorCountdowns" :key="item.id" class="holiday-card">
-          <div v-if="item.name === '国庆'" class="flag-stars">
+          <div v-if="item.name.includes('国庆')" class="flag-stars">
             <span class="big-star">★</span>
             <span class="small-star star-1">★</span>
             <span class="small-star star-2">★</span>
@@ -505,16 +505,21 @@ onUnmounted(() => {
 }
 
 .holiday-card:nth-child(4) {
-  background: linear-gradient(135deg, #51cf66 0%, #2f9e44 100%);
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
   color: white;
 }
 
 .holiday-card:nth-child(5) {
+  background: linear-gradient(135deg, #51cf66 0%, #2f9e44 100%);
+  color: white;
+}
+
+.holiday-card:nth-child(6) {
   background: linear-gradient(135deg, #ffd43b 0%, #fab005 100%);
   color: #2d3436;
 }
 
-.holiday-card:nth-child(6) {
+.holiday-card:nth-child(7) {
   background: linear-gradient(135deg, #de2910 0%, #c41e0f 100%);
   color: white;
 }

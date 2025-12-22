@@ -12,6 +12,7 @@ const MAJOR_HOLIDAYS: MajorHolidayConfig[] = [
   { name: "元旦", type: "solar", month: 1, day: 1 },
   { name: "春节", type: "lunar", month: 1, day: 1 },
   { name: "清明", type: "special" },
+  { name: "劳动节", type: "solar", month: 5, day: 1 },
   { name: "端午", type: "lunar", month: 5, day: 5 },
   { name: "中秋", type: "lunar", month: 8, day: 15 },
   { name: "国庆", type: "solar", month: 10, day: 1 },
