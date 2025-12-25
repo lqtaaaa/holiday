@@ -26,7 +26,10 @@ function calculateQingming(year: number): dayjs.Dayjs {
   return dayjs().year(year).month(3).date(day).startOf("day");
 }
 
-function computeFallbackDate(config: MajorHolidayConfig, year: number): dayjs.Dayjs {
+function computeFallbackDate(
+  config: MajorHolidayConfig,
+  year: number
+): dayjs.Dayjs {
   try {
     if (config.type === "solar" && config.month && config.day) {
       return dayjs()
@@ -60,12 +63,13 @@ function findNextEvent(
       // 必须包含节假日名称
       if (!eventName.includes(name)) return false;
       // 排除工作日（班）
-      if (eventName.includes("(班)") || eventName.includes("（班）")) return false;
+      if (eventName.includes("(班)") || eventName.includes("（班）"))
+        return false;
       return true;
     })
     .sort((a, b) => dayjs(a.date).valueOf() - dayjs(b.date).valueOf());
 
-  // 优先查找带有"(休)"标记的第一个未来事件
+  // 优先查找带有"(休)"标记的第一个未来事件（节假日第一天）
   for (const event of filtered) {
     if (dayjs(event.date).endOf("day").isAfter(now)) {
       const eventName = event.name;
@@ -121,5 +125,7 @@ export function ensureMajorHolidayEvents(
     });
   });
 
-  return ensured.sort((a, b) => dayjs(a.date).valueOf() - dayjs(b.date).valueOf());
+  return ensured.sort(
+    (a, b) => dayjs(a.date).valueOf() - dayjs(b.date).valueOf()
+  );
 }

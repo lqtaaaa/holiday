@@ -37,7 +37,9 @@ const { payday } = usePayday();
 
 const showSeconds = computed(() => displaySettings.value.showSeconds);
 const timeDisplay = computed(() =>
-  showSeconds.value ? currentDateInfo.value.time : currentDateInfo.value.timeSimple
+  showSeconds.value
+    ? currentDateInfo.value.time
+    : currentDateInfo.value.timeSimple
 );
 const isStealthMode = computed(() => displaySettings.value.mode === "stealth");
 const isFriday = computed(() => currentTime.value.day() === 5);
@@ -128,8 +130,7 @@ onUnmounted(() => {
   <div
     class="countdown-page"
     :class="{ 'stealth-mode': isStealthMode }"
-    @dblclick.self="handleToggleStealth"
-  >
+    @dblclick.self="handleToggleStealth">
     <header v-if="!isStealthMode" class="header">
       <div class="clock-block">
         <div class="time-display">{{ timeDisplay }}</div>
@@ -139,7 +140,12 @@ onUnmounted(() => {
         </div>
       </div>
       <div class="header-actions">
-        <button class="stealth-btn" title="切换摸鱼模式" @click="handleToggleStealth">👁</button>
+        <button
+          class="stealth-btn"
+          title="切换摸鱼模式"
+          @click="handleToggleStealth">
+          👁
+        </button>
         <button class="settings-btn" @click="handleOpenSettings">
           <span>⚙️</span>
           <span>设置</span>
@@ -154,8 +160,7 @@ onUnmounted(() => {
         :lunar="currentDateInfo.lunar"
         :status="workStatusText"
         :remaining="workRemainingText"
-        :payday-text="stealthPaydayText"
-      />
+        :payday-text="stealthPaydayText" />
       <button class="stealth-exit" @click="handleToggleStealth">👀</button>
     </section>
 
@@ -164,11 +169,12 @@ onUnmounted(() => {
         v-if="workCountdown"
         class="work-card-enhanced"
         @dblclick.stop.prevent="handleManualConfetti"
-        title="双击触发礼花 🎉"
-      >
-        <div class="work-icon">{{ isFriday ? '🎉' : '🏃' }}</div>
+        title="双击触发礼花 🎉">
+        <div class="work-icon">{{ isFriday ? "🎉" : "🏃" }}</div>
         <div class="work-content">
-          <div class="work-title">{{ isFriday ? '周五限定：坚持住！' : '下班倒计时' }}</div>
+          <div class="work-title">
+            {{ isFriday ? "周五限定：坚持住！" : "下班倒计时" }}
+          </div>
           <div class="work-time">{{ workCountdown.text }}</div>
           <div class="work-target">目标：{{ workCountdown.targetText }}</div>
           <ProgressBar
@@ -177,8 +183,7 @@ onUnmounted(() => {
             :status-text="workStatusText"
             :worked-text="workWorkedText"
             :total-text="workTotalText"
-            :remaining-text="workRemainingText"
-          />
+            :remaining-text="workRemainingText" />
         </div>
       </div>
       <div v-else class="work-card-empty">
@@ -191,15 +196,17 @@ onUnmounted(() => {
           :diff-days="payday.diffDays"
           :date-text="payday.dateText"
           :message="payday.message"
-          :is-soon="payday.isSoon"
-        />
+          :is-soon="payday.isSoon" />
       </div>
     </section>
 
     <section class="holiday-section">
-      <h2 class="section-title">🎉 节日倒计时</h2>
+      <h2 class="section-title">🎉 节假日倒计时</h2>
       <div class="holiday-grid">
-        <div v-for="item in majorCountdowns" :key="item.id" class="holiday-card">
+        <div
+          v-for="item in majorCountdowns"
+          :key="item.id"
+          class="holiday-card">
           <div v-if="item.name.includes('国庆')" class="flag-stars">
             <span class="big-star">★</span>
             <span class="small-star star-1">★</span>
@@ -223,7 +230,10 @@ onUnmounted(() => {
         <div class="section-tips">在设置页添加</div>
       </div>
       <div v-if="customCountdowns.length" class="custom-grid">
-        <div v-for="item in customCountdowns" :key="item.id" class="custom-card">
+        <div
+          v-for="item in customCountdowns"
+          :key="item.id"
+          class="custom-card">
           <div class="custom-name">{{ item.name }}</div>
           <div class="custom-date">{{ item.targetDate }}</div>
           <div class="custom-days">
